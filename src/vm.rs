@@ -479,7 +479,7 @@ where
         let idx = self.read_u32() as usize;
         let ptr = self.stack.get_raw(adjust_idx!(self, idx));
         unsafe {
-            *ptr = pop!(self.stack);
+            ptr.write(pop!(self.stack));
         }
     }
 
@@ -502,7 +502,7 @@ where
         let item = pop!(self.stack);
         match pop!(self.stack) {
             Object::Ptr(ptr) => {
-                unsafe { *ptr = item };
+                unsafe { ptr.write(item) };
             }
             _ => bail!("vm: tried to deref a non-ptr"),
         }
@@ -660,6 +660,21 @@ pub struct StructObject<'src> {
 pub struct BytecodePtr {
     ptr: *const u8,
     location: usize,
+}
+
+impl std::default::Default for BytecodePtr {
+    fn default() -> Self {
+        Self {
+            location: 0,
+            ptr: std::ptr::null(),
+        }
+    }
+}
+
+impl<'src> std::default::Default for Object<'src> {
+    fn default() -> Self {
+        Self::Null
+    }
 }
 
 impl<'src> std::ops::Add for Object<'src> {
@@ -867,7 +882,7 @@ struct Stack<T> {
 
 impl<T> Stack<T>
 where
-    T: std::fmt::Debug,
+    T: std::fmt::Debug + std::default::Default,
 {
     fn with_capacity(capacity: usize) -> Self {
         use std::mem::ManuallyDrop;
@@ -895,7 +910,7 @@ where
         self.tos -= 1;
         unsafe {
             let ptr = self.data.add(self.tos);
-            ptr.read()
+            std::ptr::replace(ptr, T::default())
         }
     }
 
