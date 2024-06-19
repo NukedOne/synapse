@@ -1,5 +1,4 @@
 use crate::compiler::{Blueprint, Bytecode, Function, Opcode};
-use anyhow::{bail, Result};
 use std::borrow::Cow;
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
@@ -7,11 +6,7 @@ macro_rules! binop_arithmetic {
     ($self:tt, $op:tt) => {{
         let b = $self.stack.pop();
         let a = $self.stack.pop();
-        let res = (a $op b);
-        match res {
-            Ok(r) => $self.stack.push(r.into()),
-            Err(e) => bail!(e),
-        }
+        $self.stack.push((a $op b).into());
     }};
 }
 
@@ -27,7 +22,7 @@ macro_rules! binop_relational {
         let b = $self.stack.pop();
         let a = $self.stack.pop();
         if std::mem::discriminant(&a) != std::mem::discriminant(&b) {
-            bail!("vm: only numbers can be: <, >, <=, >=");
+            panic!("vm: only numbers can be: <, >, <=, >=");
         }
         $self.stack.push((a $op b).into());
     }};
@@ -64,7 +59,53 @@ where
         }
     }
 
-    pub fn exec(&mut self) -> Result<()> {
+    const DISPATCH_TABLE: [fn(&mut VM<'src, 'bytecode>); 43] = [
+        VM::handle_op_print,
+        VM::handle_op_const,
+        VM::handle_op_add,
+        VM::handle_op_sub,
+        VM::handle_op_mul,
+        VM::handle_op_div,
+        VM::handle_op_mod,
+        VM::handle_op_bitand,
+        VM::handle_op_bitor,
+        VM::handle_op_bitxor,
+        VM::handle_op_bitshl,
+        VM::handle_op_bitshr,
+        VM::handle_op_bitnot,
+        VM::handle_op_false,
+        VM::handle_op_not,
+        VM::handle_op_neg,
+        VM::handle_op_null,
+        VM::handle_op_eq,
+        VM::handle_op_lt,
+        VM::handle_op_gt,
+        VM::handle_op_str,
+        VM::handle_op_jmp,
+        VM::handle_op_jz,
+        VM::handle_op_call,
+        VM::handle_op_call_method,
+        VM::handle_op_ret,
+        VM::handle_op_deepget,
+        VM::handle_op_deepgetptr,
+        VM::handle_op_deepset,
+        VM::handle_op_deref,
+        VM::handle_op_derefset,
+        VM::handle_op_getattr,
+        VM::handle_op_getattrptr,
+        VM::handle_op_setattr,
+        VM::handle_op_strcat,
+        VM::handle_op_struct,
+        VM::handle_op_struct_blueprint,
+        VM::handle_op_impl,
+        VM::handle_op_vec,
+        VM::handle_op_vec_set,
+        VM::handle_op_subscript,
+        VM::handle_op_pop,
+        VM::handle_op_hlt,
+    ];
+
+    pub fn exec(&mut self) {
         self.ip = self.bytecode.code.as_mut_ptr();
 
         loop {
@@ -74,52 +115,8 @@ where
                 println!("current instruction: {:?}", opcode);
             }
 
-            match opcode {
-                Opcode::Const => self.handle_op_const(),
-                Opcode::Str => self.handle_op_str(),
-                Opcode::Print => self.handle_op_print(),
-                Opcode::Add => self.handle_op_add()?,
-                Opcode::Sub => self.handle_op_sub()?,
-                Opcode::Mul => self.handle_op_mul()?,
-                Opcode::Div => self.handle_op_div()?,
-                Opcode::Mod => self.handle_op_mod()?,
-                Opcode::BitAnd => self.handle_op_bitand()?,
-                Opcode::BitOr => self.handle_op_bitor()?,
-                Opcode::BitXor => self.handle_op_bitxor()?,
-                Opcode::BitNot => self.handle_op_bitnot()?,
-                Opcode::BitShl => self.handle_op_bitshl()?,
-                Opcode::BitShr => self.handle_op_bitshr()?,
-                Opcode::False => self.handle_op_false(),
-                Opcode::Not => self.handle_op_not()?,
-                Opcode::Neg => self.handle_op_neg()?,
-                Opcode::Null => self.handle_op_null(),
-                Opcode::Eq => self.handle_op_eq(),
-                Opcode::Lt => self.handle_op_lt()?,
-                Opcode::Gt => self.handle_op_gt()?,
-                Opcode::Jmp => self.handle_op_jmp(),
-                Opcode::Jz => self.handle_op_jz(),
-                Opcode::Call => self.handle_op_call(),
-                Opcode::CallMethod => self.handle_op_call_method()?,
-                Opcode::Ret => self.handle_op_ret(),
-                Opcode::Deepget => self.handle_op_deepget(),
-                Opcode::DeepgetPtr => self.handle_op_deepgetptr(),
-                Opcode::Deepset => self.handle_op_deepset(),
-                Opcode::Deref => self.handle_op_deref()?,
-                Opcode::DerefSet => self.handle_op_derefset()?,
-                Opcode::Getattr => self.handle_op_getattr()?,
-                Opcode::GetattrPtr => self.handle_op_getattrptr()?,
-                Opcode::Setattr => self.handle_op_setattr(),
-                Opcode::Struct => self.handle_op_struct(),
-                Opcode::StructBlueprint => self.handle_op_struct_blueprint()?,
-                Opcode::Impl => self.handle_op_impl()?,
-                Opcode::Strcat => self.handle_op_strcat()?,
-                Opcode::Vec => self.handle_op_vec(),
-                Opcode::VecSet => self.handle_op_vec_set(),
-                Opcode::Subscript => self.handle_op_subscript(),
-                Opcode::Pop => self.handle_op_pop(),
-                Opcode::Halt => break Ok(()),
-                Opcode::Raw => panic!("vm: raw byte"),
-            }
+            Self::DISPATCH_TABLE[opcode as usize](self);
+
 
             if cfg!(debug_assertions) {
                 self.stack.print_elements();
@@ -182,7 +179,7 @@ where
     /// ects off the stack (expected to be strings),
     /// concatenating them into a new string object,
     /// and pushing the new object on the stack.
-    fn handle_op_strcat(&mut self) -> Result<()> {
+    fn handle_op_strcat(&mut self) {
         let b = self.stack.pop();
         let a = self.stack.pop();
 
@@ -192,13 +189,10 @@ where
                     .push(format!("{}{}", a.to_owned(), b.to_owned()).into());
             }
             _ => {
-                bail!("vm: only strings can be concatenated");
+                panic!("vm: only strings can be concatenated");
             }
         }
-
-        Ok(())
     }
-
     /// Handles 'Opcode::Print' by popping an obj-
     /// ect off the stack and printing it out.
     fn handle_op_print(&mut self) {
@@ -212,108 +206,75 @@ where
     /// Handles 'Opcode::Add' by popping two obj-
     /// ects off the stack, adding them together,
     /// and pushing the result back on the stack.
-    fn handle_op_add(&mut self) -> Result<()> {
+    fn handle_op_add(&mut self) {
         binop_arithmetic!(self, +);
-
-        Ok(())
     }
-
     /// Handles 'Opcode::Sub' by popping two obj-
     /// ects off the stack, subtracting them, and
     /// pushing the result back on the stack.
-    fn handle_op_sub(&mut self) -> Result<()> {
+    fn handle_op_sub(&mut self) {
         binop_arithmetic!(self, -);
-
-        Ok(())
     }
-
     /// Handles 'Opcode::Mul' by popping two obj-
     /// ects off the stack, multiplying them, and
     /// pushing the result back on the stack.
-    fn handle_op_mul(&mut self) -> Result<()> {
+    fn handle_op_mul(&mut self) {
         binop_arithmetic!(self, *);
-
-        Ok(())
     }
-
     /// Handles 'Opcode::Div' by popping two obj-
     /// ects off the stack, dividing them, and p-
     /// ushing the result back on the stack.
-    fn handle_op_div(&mut self) -> Result<()> {
+    fn handle_op_div(&mut self) {
         binop_arithmetic!(self, /);
-
-        Ok(())
     }
-
     /// Handles 'Opcode::Mod' by popping two obj-
     /// ects off the stack, mod-ing them, and pu-
     /// shing the result back on the stack.
-    fn handle_op_mod(&mut self) -> Result<()> {
+    fn handle_op_mod(&mut self) {
         binop_arithmetic!(self, %);
-
-        Ok(())
     }
-
     /// Handles 'Opcode::BitAnd' by popping two obj-
     /// ects off the stack, bitwise-anding them, and
     /// pushing the result back on the stack.
-    fn handle_op_bitand(&mut self) -> Result<()> {
+    fn handle_op_bitand(&mut self) {
         binop_arithmetic!(self, &);
-
-        Ok(())
     }
-
     /// Handles 'Opcode::BitOr' by popping two obj-
     /// ects off the stack, bitwise-oring them, and
     /// pushing the result back on the stack.
-    fn handle_op_bitor(&mut self) -> Result<()> {
+    fn handle_op_bitor(&mut self) {
         binop_arithmetic!(self, |);
-
-        Ok(())
     }
-
     /// Handles 'Opcode::BitXor' by popping two obj-
     /// ects off the stack, bitwise-xoring them, and
     /// pushing the result back on the stack.
-    fn handle_op_bitxor(&mut self) -> Result<()> {
+    fn handle_op_bitxor(&mut self) {
         binop_arithmetic!(self, ^);
-
-        Ok(())
     }
-
     /// Handles 'Opcode::BitShl' by popping two obje-
     /// cts off the stack, performing the bitwise shl
     /// operation on the first operand using the sec-
     /// ond operand as the shift amount, and pushing
     /// the result back on the stack.
-    fn handle_op_bitshl(&mut self) -> Result<()> {
+    fn handle_op_bitshl(&mut self) {
         binop_arithmetic!(self, <<);
-
-        Ok(())
     }
-
     /// Handles 'Opcode::BitShr' by popping two obje-
     /// cts off the stack, performing the bitwise shr
     /// operation on the first operand using the sec-
     /// ond operand as the shift amount, and pushing
     /// the result back on the stack.
-    fn handle_op_bitshr(&mut self) -> Result<()> {
+    fn handle_op_bitshr(&mut self) {
         binop_arithmetic!(self, >>);
-
-        Ok(())
     }
-
     /// Handles 'Opcode::BitNot' by popping an obje-
     /// ct off the stack, performing the bitwise not
     /// operation on it, and pushing the result back
     /// on the stack.
-    fn handle_op_bitnot(&mut self) -> Result<()> {
+    fn handle_op_bitnot(&mut self) {
         let obj = self.stack.pop();
-        self.stack.push((!obj)?);
-
-        Ok(())
+        self.stack.push(!obj);
     }
-
     /// Handles 'Opcode::False' by constructing an
     /// Object::Bool, with false as its value, and
     /// pushing it on the stack.
@@ -325,24 +286,18 @@ where
     /// off the stack, performing the logical not
     /// operation on it, and pushing the result back
     /// on the stack.
-    fn handle_op_not(&mut self) -> Result<()> {
+    fn handle_op_not(&mut self) {
         let obj = self.stack.pop();
-        self.stack.push((!obj)?);
-
-        Ok(())
+        self.stack.push(!obj);
     }
-
     /// Handles 'Opcode::Neg' by popping an object
     /// off the stack, performing the logical negate
     /// operation on it, and pushing the result back
     /// on the stack.
-    fn handle_op_neg(&mut self) -> Result<()> {
+    fn handle_op_neg(&mut self) {
         let obj = self.stack.pop();
-        self.stack.push((-obj)?);
-
-        Ok(())
+        self.stack.push(-obj);
     }
-
     /// Handles 'Opcode::Null' by constructing an
     /// Object::Null and pushing it on the stack.
     fn handle_op_null(&mut self) {
@@ -363,22 +318,16 @@ where
     /// off the stack, performing the less-than check
     /// on them, and pushing the boolean result back
     /// on the stack.
-    fn handle_op_lt(&mut self) -> Result<()> {
+    fn handle_op_lt(&mut self) {
         binop_relational!(self, <);
-
-        Ok(())
     }
-
     /// Handles 'Opcode::Gt' by popping two objects
     /// off the stack, performing the greater-than
     /// check on them, and pushing the boolean result
     /// back on the stack.
-    fn handle_op_gt(&mut self) -> Result<()> {
+    fn handle_op_gt(&mut self) {
         binop_relational!(self, >);
-
-        Ok(())
     }
-
     /// Handles 'Opcode::Jmp(usize)' by setting the
     /// instruction pointer to the address provided
     /// in the opcode.
@@ -418,7 +367,7 @@ where
         });
     }
 
-    fn handle_op_call_method(&mut self) -> Result<()> {
+    fn handle_op_call_method(&mut self) {
         let method_name_idx = self.read_u32();
         let argcount = self.read_u32();
 
@@ -427,7 +376,7 @@ where
         let object_type = if let Object::Struct(structobj) = object {
             structobj.borrow().name
         } else {
-            bail!("vm: tried to call a method on a non-struct");
+            panic!("vm: tried to call a method on a non-struct");
         };
 
         // It's safe to .unwrap() here because the blueprint must have been defined already.
@@ -437,7 +386,7 @@ where
 
         if let Some(method) = blueprint.methods.get(method_name) {
             if argcount as usize != method.paramcount - 1 {
-                bail!(
+                panic!(
                     "vm: method '{}' expects {} arguments, got {}",
                     method.name,
                     method.paramcount - 1,
@@ -454,16 +403,13 @@ where
                 self.ip = self.bytecode.code.as_mut_ptr().add(method.location);
             }
         } else {
-            bail!(
+            panic!(
                 "vm: struct '{}' has no method '{}'",
                 object_type,
                 method_name
             );
         }
-
-        Ok(())
     }
-
     /// Handles 'Opcode::Ret' by popping a BytecodePtr
     /// object off of the frame ptr stack, and setting
     /// the instruction pointer to the address contai-
@@ -510,72 +456,60 @@ where
     /// Handles 'Opcode::Deref' by popping an object off
     /// the stack, dereferencing it, and pushing the re-
     /// sult back on the stack.
-    fn handle_op_deref(&mut self) -> Result<()> {
+    fn handle_op_deref(&mut self) {
         match self.stack.pop() {
             Object::Ptr(ptr) => self.stack.push(unsafe { (*ptr).clone() }),
-            _ => bail!("vm: tried to deref a non-ptr"),
+            _ => panic!("vm: tried to deref a non-ptr"),
         }
-
-        Ok(())
     }
-
     /// Handles 'Opcode::Derefset' by popping two objects
     /// off the stack (the value and the pointer), deref-
     /// erencing the pointer, and setting it to the value.
-    fn handle_op_derefset(&mut self) -> Result<()> {
+    fn handle_op_derefset(&mut self) {
         let item = self.stack.pop();
         match self.stack.pop() {
             Object::Ptr(ptr) => {
                 unsafe { *ptr = item };
             }
-            _ => bail!("vm: tried to deref a non-ptr"),
+            _ => panic!("vm: tried to deref a non-ptr"),
         }
-
-        Ok(())
     }
-
     /// Handles 'Opcode::Getattr(&str)' by popping an object
     /// off the stack (expected to be a struct), looking up the
     /// member with the &str value contained in the opcode, and
     /// pushing it on the stack.
-    fn handle_op_getattr(&mut self) -> Result<()> {
+    fn handle_op_getattr(&mut self) {
         let idx = self.read_u32() as usize;
         let attr = unsafe { self.bytecode.sp.get_unchecked(idx) };
         if let Object::Struct(obj) = self.stack.pop() {
             match obj.borrow().members.get(attr) {
                 Some(m) => self.stack.push(m.clone()),
-                None => bail!(
+                None => panic!(
                     "vm: struct '{}' has no member '{}'",
                     obj.borrow().name,
                     attr
                 ),
             };
         }
-
-        Ok(())
     }
-
     /// Handles 'Opcode::GetattrPtr(&str)' by popping an object
     /// off the stack (expected to be a struct), looking up the
     /// member with the &str value contained in the opcode, and
     /// pushing the pointer to it on the stack.
-    fn handle_op_getattrptr(&mut self) -> Result<()> {
+    fn handle_op_getattrptr(&mut self) {
         let idx = self.read_u32() as usize;
         let attr = unsafe { self.bytecode.sp.get_unchecked(idx) };
         if let Object::Struct(obj) = self.stack.pop() {
             match obj.borrow_mut().members.get_mut(attr) {
                 Some(m) => self.stack.push(Object::Ptr(m as *mut Object<'src>)),
-                None => bail!(
+                None => panic!(
                     "vm: struct '{}' has no member '{}'",
                     obj.borrow().name,
                     attr
                 ),
             };
         }
-
-        Ok(())
     }
-
     /// Handles 'Opcode::Setattr(&str)' by popping two objects
     /// off the stack (expected to be a value and a struct, re-
     /// spectively), setting the member with the &str value co-
@@ -610,7 +544,7 @@ where
         self.stack.push(structobj);
     }
 
-    fn handle_op_struct_blueprint(&mut self) -> Result<()> {
+    fn handle_op_struct_blueprint(&mut self) {
         let blueprint_name_idx = self.read_u32();
         let member_count = self.read_u32();
 
@@ -628,11 +562,8 @@ where
 
         self.blueprints
             .insert(self.bytecode.sp[blueprint_name_idx as usize], bp);
-
-        Ok(())
     }
-
-    fn handle_op_impl(&mut self) -> Result<()> {
+    fn handle_op_impl(&mut self) {
         let blueprint_name_idx = self.read_u32();
         let method_count = self.read_u32();
 
@@ -655,10 +586,7 @@ where
                 bp.methods.insert(f.name, f);
             }
         }
-
-        Ok(())
     }
-
     fn handle_op_vec(&mut self) {
         let element_count = self.read_u32() as usize;
 
@@ -700,6 +628,10 @@ where
             self.stack.pop();
         }
     }
+
+    fn handle_op_hlt(&mut self) {
+        std::process::exit(0);
+    }
 }
 
 #[derive(Debug, PartialEq, Clone)]
@@ -732,153 +664,153 @@ impl<'src> std::default::Default for Object<'src> {
 }
 
 impl<'src> std::ops::Add for Object<'src> {
-    type Output = Result<Object<'src>>;
+    type Output = Object<'src>;
 
     fn add(self, rhs: Self) -> Self::Output {
         match (self, rhs) {
-            (Object::Number(a), Object::Number(b)) => Ok((a + b).into()),
-            _ => bail!("vm: only numbers can be +"),
+            (Object::Number(a), Object::Number(b)) => (a + b).into(),
+            _ => panic!("vm: only numbers can be +"),
         }
     }
 }
 
 impl<'src> std::ops::Sub for Object<'src> {
-    type Output = Result<Object<'src>>;
+    type Output = Object<'src>;
 
     fn sub(self, rhs: Self) -> Self::Output {
         match (self, rhs) {
-            (Object::Number(a), Object::Number(b)) => Ok((a - b).into()),
-            _ => bail!("vm: only numbers can be -"),
+            (Object::Number(a), Object::Number(b)) => (a - b).into(),
+            _ => panic!("vm: only numbers can be -"),
         }
     }
 }
 
 impl<'src> std::ops::Mul for Object<'src> {
-    type Output = Result<Object<'src>>;
+    type Output = Object<'src>;
 
     fn mul(self, rhs: Self) -> Self::Output {
         match (self, rhs) {
-            (Object::Number(a), Object::Number(b)) => Ok((a * b).into()),
-            _ => bail!("vm: only numbers can be *"),
+            (Object::Number(a), Object::Number(b)) => (a * b).into(),
+            _ => panic!("vm: only numbers can be *"),
         }
     }
 }
 
 impl<'src> std::ops::Div for Object<'src> {
-    type Output = Result<Object<'src>>;
+    type Output = Object<'src>;
 
     fn div(self, rhs: Self) -> Self::Output {
         match (self, rhs) {
-            (Object::Number(a), Object::Number(b)) => Ok((a / b).into()),
-            _ => bail!("vm: only numbers can be /"),
+            (Object::Number(a), Object::Number(b)) => (a / b).into(),
+            _ => panic!("vm: only numbers can be /"),
         }
     }
 }
 
 impl<'src> std::ops::Rem for Object<'src> {
-    type Output = Result<Object<'src>>;
+    type Output = Object<'src>;
 
     fn rem(self, rhs: Self) -> Self::Output {
         match (self, rhs) {
-            (Object::Number(a), Object::Number(b)) => Ok((a % b).into()),
-            _ => bail!("vm: only numbers can be %"),
+            (Object::Number(a), Object::Number(b)) => (a % b).into(),
+            _ => panic!("vm: only numbers can be %"),
         }
     }
 }
 
 impl<'src> std::ops::BitAnd for Object<'src> {
-    type Output = Result<Object<'src>>;
+    type Output = Object<'src>;
 
     fn bitand(self, rhs: Self) -> Self::Output {
         match (self, rhs) {
             (Object::Number(a), Object::Number(b)) => {
                 let (a, b) = prepare4bitwise(a, b);
-                Ok(((a & b) as f64).into())
+                ((a & b) as f64).into()
             }
-            _ => bail!("vm: only numbers can be %"),
+            _ => panic!("vm: only numbers can be %"),
         }
     }
 }
 
 impl<'src> std::ops::BitOr for Object<'src> {
-    type Output = Result<Object<'src>>;
+    type Output = Object<'src>;
 
     fn bitor(self, rhs: Self) -> Self::Output {
         match (self, rhs) {
             (Object::Number(a), Object::Number(b)) => {
                 let (a, b) = prepare4bitwise(a, b);
-                Ok(((a | b) as f64).into())
+                ((a | b) as f64).into()
             }
-            _ => bail!("vm: only numbers can be %"),
+            _ => panic!("vm: only numbers can be %"),
         }
     }
 }
 
 impl<'src> std::ops::BitXor for Object<'src> {
-    type Output = Result<Object<'src>>;
+    type Output = Object<'src>;
 
     fn bitxor(self, rhs: Self) -> Self::Output {
         match (self, rhs) {
             (Object::Number(a), Object::Number(b)) => {
                 let (a, b) = prepare4bitwise(a, b);
-                Ok(((a ^ b) as f64).into())
+                ((a ^ b) as f64).into()
             }
-            _ => bail!("vm: only numbers can be %"),
+            _ => panic!("vm: only numbers can be %"),
         }
     }
 }
 
 impl<'src> std::ops::Shl for Object<'src> {
-    type Output = Result<Object<'src>>;
+    type Output = Object<'src>;
 
     fn shl(self, rhs: Self) -> Self::Output {
         match (self, rhs) {
             (Object::Number(a), Object::Number(b)) => {
                 let (a, b) = prepare4bitwise(a, b);
-                Ok(((a << b) as f64).into())
+                ((a << b) as f64).into()
             }
-            _ => bail!("vm: only numbers can be %"),
+            _ => panic!("vm: only numbers can be %"),
         }
     }
 }
 
 impl<'src> std::ops::Shr for Object<'src> {
-    type Output = Result<Object<'src>>;
+    type Output = Object<'src>;
 
     fn shr(self, rhs: Self) -> Self::Output {
         match (self, rhs) {
             (Object::Number(a), Object::Number(b)) => {
                 let (a, b) = prepare4bitwise(a, b);
-                Ok(((a >> b) as f64).into())
+                ((a >> b) as f64).into()
             }
-            _ => bail!("vm: only numbers can be %"),
+            _ => panic!("vm: only numbers can be %"),
         }
     }
 }
 
 impl<'src> std::ops::Not for Object<'src> {
-    type Output = Result<Object<'src>>;
+    type Output = Object<'src>;
 
     fn not(self) -> Self::Output {
         match self {
             Object::Number(n) => {
                 let truncated = n as u64;
                 let reduced = (truncated % (1u64 << 32)) as u32;
-                Ok(((!reduced) as f64).into())
+                ((!reduced) as f64).into()
             }
-            Object::Bool(b) => Ok((!b).into()),
-            _ => bail!("vm: only bools can be !"),
+            Object::Bool(b) => (!b).into(),
+            _ => panic!("vm: only bools can be !"),
         }
     }
 }
 
 impl<'src> std::ops::Neg for Object<'src> {
-    type Output = Result<Object<'src>>;
+    type Output = Object<'src>;
 
     fn neg(self) -> Self::Output {
         match self {
-            Object::Number(b) => Ok((-b).into()),
-            _ => bail!("vm: only numbers can be -"),
+            Object::Number(b) => (-b).into(),
+            _ => panic!("vm: only numbers can be -"),
         }
     }
 }

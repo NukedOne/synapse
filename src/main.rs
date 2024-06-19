@@ -48,7 +48,7 @@ fn run(path: &str) -> Result<()> {
     let bytecode = compiler.compile(&ast)?;
 
     let mut vm = VM::new(bytecode);
-    vm.exec()?;
+    vm.exec();
 
     Ok(())
 }
