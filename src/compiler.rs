@@ -391,35 +391,35 @@ impl<'src> Codegen<'src> for FnStatement<'src> {
 
         if let Statement::Block(block) = &*self.body {
             for statement in block.body.iter() {
-                if let Statement::Return(ret_stmt) = statement {
-                    if let Expression::Call(call_expr) = &ret_stmt.expression {
-                        if let Expression::Variable(calleee) = &*call_expr.callee {
-                            if calleee.value == self.name.get_value() {
-                                for arg in &call_expr.arguments {
-                                    arg.codegen(compiler)?;
+                match statement {
+                    Statement::Return(return_statement) => match &return_statement.expression {
+                        Expression::Call(call_expr) => match &*call_expr.callee {
+                            Expression::Variable(calleee) => {
+                                if calleee.value == self.name.get_value() {
+                                    for arg in &call_expr.arguments {
+                                        arg.codegen(compiler)?;
+                                    }
+
+                                    let mut deepset_no =
+                                        call_expr.arguments.len().saturating_sub(1);
+                                    for _ in 0..call_expr.arguments.len() {
+                                        compiler.emit_opcodes(&[Opcode::Deepset]);
+                                        compiler.emit_u32(deepset_no as u32);
+
+                                        deepset_no = deepset_no.saturating_sub(1);
+                                    }
+
+                                    compiler.emit_opcodes(&[Opcode::Jmp]);
+                                    compiler.emit_u32(f.location as u32 + 4);
+                                } else {
+                                    return_statement.codegen(compiler)?;
                                 }
-
-                                let mut deepset_no = call_expr.arguments.len().saturating_sub(1);
-                                for _ in 0..call_expr.arguments.len() {
-                                    compiler.emit_opcodes(&[Opcode::Deepset]);
-                                    compiler.emit_u32(deepset_no as u32);
-
-                                    deepset_no = deepset_no.saturating_sub(1);
-                                }
-
-                                compiler.emit_opcodes(&[Opcode::Jmp]);
-                                compiler.emit_u32(f.location as u32 + 4);
-                            } else {
-                                ret_stmt.codegen(compiler)?;
                             }
-                        } else {
-                            ret_stmt.codegen(compiler)?;
-                        }
-                    } else {
-                        ret_stmt.codegen(compiler)?;
-                    }
-                } else {
-                    statement.codegen(compiler)?;
+                            _ => return_statement.codegen(compiler)?,
+                        },
+                        _ => return_statement.codegen(compiler)?,
+                    },
+                    _ => statement.codegen(compiler)?,
                 }
             }
         }
