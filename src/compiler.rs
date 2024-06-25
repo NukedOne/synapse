@@ -387,6 +387,8 @@ impl<'src> Codegen<'src> for FnStatement<'src> {
             compiler.locals.push(argument.get_value());
         }
 
+        let boundary = compiler.locals.len();
+
         compiler.pops.push(compiler.locals.len());
 
         if let Statement::Block(block) = &*self.body {
@@ -407,6 +409,13 @@ impl<'src> Codegen<'src> for FnStatement<'src> {
                                         compiler.emit_u32(deepset_no as u32);
 
                                         deepset_no = deepset_no.saturating_sub(1);
+                                    }
+
+                                    let cloned = compiler.locals.clone();
+
+                                    for _ in &cloned[boundary..] {
+                                        compiler.emit_opcodes(&[Opcode::Pop]);
+                                        compiler.emit_u32(1);
                                     }
 
                                     compiler.emit_opcodes(&[Opcode::Jmp]);
