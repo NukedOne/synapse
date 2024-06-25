@@ -379,6 +379,7 @@ impl<'src> Codegen<'src> for FnStatement<'src> {
             localscount: 0,
             location: jmp_idx,
             paramcount: arguments.len(),
+            optimized: false,
         };
         compiler.functions.insert(name, f.clone());
 
@@ -389,8 +390,43 @@ impl<'src> Codegen<'src> for FnStatement<'src> {
         compiler.pops.push(compiler.locals.len());
 
         if let Statement::Block(block) = &*self.body {
-            block.codegen(compiler)?;
+            for statement in block.body.iter() {
+                if let Statement::Return(ret_stmt) = statement {
+                    if let Expression::Call(call_expr) = &ret_stmt.expression {
+                        if let Expression::Variable(calleee) = &*call_expr.callee {
+                            if calleee.value == self.name.get_value() {
+                                for arg in &call_expr.arguments {
+                                    arg.codegen(compiler)?;
+                                }
+
+                                let mut deepset_no = call_expr.arguments.len().saturating_sub(1);
+                                for _ in 0..call_expr.arguments.len() {
+                                    compiler.emit_opcodes(&[Opcode::Deepset]);
+                                    compiler.emit_u32(deepset_no as u32);
+
+                                    deepset_no = deepset_no.saturating_sub(1);
+                                }
+
+                                compiler.emit_opcodes(&[Opcode::Jmp]);
+                                compiler.emit_u32(f.location as u32 + 4);
+                            } else {
+                                ret_stmt.codegen(compiler)?;
+                            }
+                        } else {
+                            ret_stmt.codegen(compiler)?;
+                        }
+                    } else {
+                        ret_stmt.codegen(compiler)?;
+                    }
+                } else {
+                    statement.codegen(compiler)?;
+                }
+            }
         }
+
+        if let Some(func) = compiler.functions.get_mut(name) {
+            func.optimized = true;
+        };
 
         compiler.patch_jmp(jmp_idx);
 
@@ -591,6 +627,7 @@ impl<'src> Codegen<'src> for ImplStatement<'src> {
                         localscount: 0,
                         location: compiler.bytecode.code.len(),
                         paramcount: method.arguments.len(),
+                        optimized: false,
                     };
                     blueprint.methods.insert(method.name.get_value(), f);
                     method.codegen(compiler)?;
@@ -1226,6 +1263,7 @@ pub enum Opcode {
     Vec,
     VecSet,
     Subscript,
+    IncIp,
     Pop,
     Halt,
 
@@ -1249,6 +1287,7 @@ pub struct Function<'src> {
     pub location: usize,
     pub paramcount: usize,
     pub localscount: usize,
+    pub optimized: bool,
 }
 
 #[derive(Debug, Clone)]

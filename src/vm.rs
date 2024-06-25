@@ -117,6 +117,7 @@ where
                 Opcode::VecSet => self.handle_op_vec_set(),
                 Opcode::Subscript => self.handle_op_subscript(),
                 Opcode::Pop => self.handle_op_pop(),
+                Opcode::IncIp => self.handle_op_inc_ip(),
                 Opcode::Halt => break Ok(()),
                 Opcode::Raw => panic!("vm: raw byte"),
             }
@@ -646,6 +647,7 @@ where
                 paramcount: paramcount as usize,
                 location: location as usize,
                 localscount: 0,
+                optimized: false,
             };
 
             if let Some(bp) = self
@@ -698,6 +700,12 @@ where
         let popcount = self.read_u32() as usize;
         for _ in 0..popcount {
             self.stack.pop();
+        }
+    }
+
+    fn handle_op_inc_ip(&mut self) {
+        unsafe {
+            self.ip = self.ip.add(4);
         }
     }
 }
