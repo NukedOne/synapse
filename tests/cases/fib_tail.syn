@@ -1,0 +1,16 @@
+fn helper(n, a, b) {
+    x = 1024;
+    print 1 + x;
+    if (n == 0) return a;
+    if (n == 1) return b;
+    return helper(n-1, b, a+b);
+}
+
+fn fib(n) {
+    return helper(n, 0, 1);
+}
+
+fn main() {
+    print fib(40);
+    return 0;
+}
