@@ -379,7 +379,6 @@ impl<'src> Codegen<'src> for FnStatement<'src> {
             localscount: 0,
             location: jmp_idx,
             paramcount: arguments.len(),
-            optimized: false,
         };
         compiler.functions.insert(name, f.clone());
 
@@ -432,10 +431,6 @@ impl<'src> Codegen<'src> for FnStatement<'src> {
                 }
             }
         }
-
-        if let Some(func) = compiler.functions.get_mut(name) {
-            func.optimized = true;
-        };
 
         compiler.patch_jmp(jmp_idx);
 
@@ -636,7 +631,6 @@ impl<'src> Codegen<'src> for ImplStatement<'src> {
                         localscount: 0,
                         location: compiler.bytecode.code.len(),
                         paramcount: method.arguments.len(),
-                        optimized: false,
                     };
                     blueprint.methods.insert(method.name.get_value(), f);
                     method.codegen(compiler)?;
@@ -1296,7 +1290,6 @@ pub struct Function<'src> {
     pub location: usize,
     pub paramcount: usize,
     pub localscount: usize,
-    pub optimized: bool,
 }
 
 #[derive(Debug, Clone)]

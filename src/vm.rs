@@ -647,7 +647,6 @@ where
                 paramcount: paramcount as usize,
                 location: location as usize,
                 localscount: 0,
-                optimized: false,
             };
 
             if let Some(bp) = self
