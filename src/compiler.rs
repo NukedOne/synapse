@@ -1266,7 +1266,6 @@ pub enum Opcode {
     Vec,
     VecSet,
     Subscript,
-    IncIp,
     Pop,
     Halt,
 

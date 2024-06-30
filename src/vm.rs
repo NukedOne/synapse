@@ -41,10 +41,10 @@ macro_rules! adjust_idx {
 }
 
 pub struct VM<'src, 'bytecode> {
-    bytecode: &'bytecode mut Bytecode<'src>,
+    pub bytecode: &'bytecode mut Bytecode<'src>,
     stack: Stack<Object<'src>>,
     frame_ptrs: Stack<BytecodePtr>,
-    ip: *mut u8,
+    pub ip: *mut u8,
     blueprints: HashMap<&'src str, Blueprint<'src>>,
 }
 
@@ -117,7 +117,6 @@ where
                 Opcode::VecSet => self.handle_op_vec_set(),
                 Opcode::Subscript => self.handle_op_subscript(),
                 Opcode::Pop => self.handle_op_pop(),
-                Opcode::IncIp => self.handle_op_inc_ip(),
                 Opcode::Halt => break Ok(()),
                 Opcode::Raw => panic!("vm: raw byte"),
             }
@@ -132,7 +131,7 @@ where
         }
     }
 
-    fn read_f64(&mut self) -> f64 {
+    pub fn read_f64(&mut self) -> f64 {
         let value = unsafe {
             let ptr = self.ip.add(1);
             let f64_ptr = ptr as *const [u8; 8];
@@ -147,7 +146,7 @@ where
         f64::from_be_bytes(value)
     }
 
-    fn read_u32(&mut self) -> u32 {
+    pub fn read_u32(&mut self) -> u32 {
         let value = unsafe {
             let ptr = self.ip.add(1);
             let u32_ptr = ptr as *const [u8; 4];
@@ -699,12 +698,6 @@ where
         let popcount = self.read_u32() as usize;
         for _ in 0..popcount {
             self.stack.pop();
-        }
-    }
-
-    fn handle_op_inc_ip(&mut self) {
-        unsafe {
-            self.ip = self.ip.add(4);
         }
     }
 }

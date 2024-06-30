@@ -1,5 +1,6 @@
 use anyhow::{bail, Result};
 use bumpalo::Bump;
+use synapse::disassembler::disassemble;
 use std::collections::VecDeque;
 use std::env;
 use synapse::compiler::Compiler;
@@ -48,6 +49,11 @@ fn run(path: &str) -> Result<()> {
     let bytecode = compiler.compile(&ast)?;
 
     let mut vm = VM::new(bytecode);
+
+    if cfg!(debug_assertions) {
+        disassemble(&mut vm);
+    }
+
     vm.exec()?;
 
     Ok(())
