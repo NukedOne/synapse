@@ -31,6 +31,7 @@ This project is my second venture into the field of programming language design.
   - recursion!
 - methods (taking in `self` as the first parameter)
 - import subsystem
+- primitive form of tail call optimization
 - `print` statement
 
 Global scope is **NOT** allowed.
