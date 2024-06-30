@@ -6,6 +6,8 @@ where
 {
     vm.ip = vm.bytecode.code.as_mut_ptr();
     while vm.ip < unsafe { vm.bytecode.code.as_mut_ptr().add(vm.bytecode.code.len()) } {
+        print!("{}: ", unsafe { vm.ip.offset_from(vm.bytecode.code.as_mut_ptr()) });
+
         let opcode = Opcode::from(unsafe { *vm.ip });
         match opcode {
             Opcode::Const => {
