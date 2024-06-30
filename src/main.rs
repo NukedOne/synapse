@@ -1,9 +1,9 @@
 use anyhow::{bail, Result};
 use bumpalo::Bump;
-use synapse::disassembler::disassemble;
 use std::collections::VecDeque;
 use std::env;
 use synapse::compiler::Compiler;
+use synapse::disassembler::disassemble;
 use synapse::parser::Parser;
 use synapse::tokenizer::{Token, Tokenizer};
 use synapse::util::read_file;

@@ -2,7 +2,7 @@ use crate::{compiler::Opcode, vm::VM};
 
 pub fn disassemble<'src, 'bytecode>(vm: &mut VM<'src, 'bytecode>)
 where
-    'bytecode: 'src
+    'bytecode: 'src,
 {
     vm.ip = vm.bytecode.code.as_mut_ptr();
     while vm.ip < unsafe { vm.bytecode.code.as_mut_ptr().add(vm.bytecode.code.len()) } {
@@ -29,7 +29,10 @@ where
                 let method_name_idx = vm.read_u32();
                 let argcount = vm.read_u32();
                 let method_name = vm.bytecode.sp[method_name_idx as usize];
-                println!("{:?} (method: {}, argcount: {})", opcode, method_name, argcount);
+                println!(
+                    "{:?} (method: {}, argcount: {})",
+                    opcode, method_name, argcount
+                );
             }
             Opcode::Deepget | Opcode::DeepgetPtr | Opcode::Deepset => {
                 let idx = vm.read_u32();
