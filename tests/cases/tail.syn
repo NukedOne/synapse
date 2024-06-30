@@ -1,0 +1,11 @@
+fn spam(n) {
+    if (n == 0) return 1024;
+    return spam(n-1);
+}
+
+fn main() {
+    x = 2;
+    spam(x);
+    print x;
+    return 0;
+}
