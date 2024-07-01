@@ -42,6 +42,7 @@ The entire system consists of:
   - a recursive-descent parser
   - a bytecode compiler
   - a virtual machine
+  - a disassembler
 
 ## Let's talk numbers
 
