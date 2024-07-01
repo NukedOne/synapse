@@ -52,9 +52,36 @@ where
                 let name = vm.bytecode.sp[name_idx as usize];
                 println!("{:?} (struct: {})", opcode, name);
             }
-            Opcode::StructBlueprint | Opcode::Impl => {
-                /* TODO */
-                println!("{:?}", opcode);
+            Opcode::StructBlueprint => {
+                let name_idx = vm.read_u32();
+                let name = vm.bytecode.sp[name_idx as usize];
+                let member_count = vm.read_u32();
+                let mut members = vec![];
+                for _ in 0..member_count {
+                    let member_name_idx = vm.read_u32();
+                    members.push(vm.bytecode.sp[member_name_idx as usize]);
+                }
+                println!("{:?} (struct {} {{ members: {:?} }}", opcode, name, members);
+            }
+            Opcode::Impl => {
+                let blueprint_name_idx = vm.read_u32();
+                let blueprint_name = vm.bytecode.sp[blueprint_name_idx as usize];
+
+                let method_count = vm.read_u32();
+
+                let mut methods = vec![];
+        
+                for _ in 0..method_count {
+                    let method_name_idx = vm.read_u32();
+                    let paramcount = vm.read_u32();
+                    let location = vm.read_u32();
+
+                    let method_name = vm.bytecode.sp[method_name_idx as usize];
+
+                    methods.push((method_name, paramcount, location));
+                }
+
+                println!("{:?} (struct {} {{ methods: {:?} }}", opcode, blueprint_name, methods)
             }
             Opcode::Vec => {
                 let elemcount = vm.read_u32();
