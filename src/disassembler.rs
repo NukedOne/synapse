@@ -70,7 +70,7 @@ where
                 let method_count = vm.read_u32();
 
                 let mut methods = vec![];
-        
+
                 for _ in 0..method_count {
                     let method_name_idx = vm.read_u32();
                     let paramcount = vm.read_u32();
@@ -81,7 +81,10 @@ where
                     methods.push((method_name, paramcount, location));
                 }
 
-                println!("{:?} (struct {} {{ methods: {:?} }}", opcode, blueprint_name, methods)
+                println!(
+                    "{:?} (struct {} {{ methods: {:?} }}",
+                    opcode, blueprint_name, methods
+                )
             }
             Opcode::Vec => {
                 let elemcount = vm.read_u32();
